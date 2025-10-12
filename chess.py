@@ -22,6 +22,7 @@ rook_moved = {0: {0: False, 7: False}, 1: {0: False, 7: False}}
 game_mode = None
 ai_depth = 12        # default depth
 ai_difficulty = "Medium"
+click_detection = False
 
 UNICODE = {
     0: {0: '\u265F', 1: '\u265A', 2: '\u265B', 3: '\u265D', 4: '\u265C', 5: '\u265E'},  
@@ -43,6 +44,8 @@ board_color_button = None
 piece_color_button = None
 board_size_button = None
 ai_difficulty_button = None
+rematch_button = None
+home_button = None
 ai = None
 
 STOCKFISH_PATH = "/opt/homebrew/bin/stockfish" 
@@ -246,9 +249,7 @@ def checkmate():
             else:
                 draw_white_wins()
         else:
-            canvas.delete("all")
-            canvas.create_text(8*cell_size//2, 4*cell_size//2, text="Stalemate!", font=("Arial", 32, "bold"))
-            create_rematch_button()
+            draw_stalemate()
         return True
     return False
 
@@ -303,24 +304,54 @@ def prompt_promotion(er, ec, player):
 
 # ---------- Win UI ----------
 def draw_white_wins():
+    global board, click_detection
     canvas.delete('all')
-    canvas.create_text(8*cell_size//2, 4*cell_size//2, text="White Wins!", font=("Arial", 32, "bold"), fill="white")
+    board = create_board()
+    click_detection = False
+    draw_board()
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            canvas.create_text(8*cell_size//2 + dx, 4*cell_size//2 + dy, text="White Wins!", font=("Arial", cell_size, "bold"), fill="#000000")
+    canvas.create_text(8*cell_size//2, 4*cell_size//2, text="White Wins!", font=("Arial", cell_size, "bold"), fill="#FFFFFF")    
     create_rematch_button()
 
 def draw_black_wins():
+    global board, click_detection
     canvas.delete('all')
-    canvas.create_text(8*cell_size//2, 4*cell_size//2, text="Black Wins!", font=("Arial", 32, "bold"), fill="black")
+    board = create_board()
+    click_detection = False
+    draw_board()
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            canvas.create_text(8*cell_size//2 + dx, 4*cell_size//2 + dy, text="Black Wins!", font=("Arial", cell_size, "bold"), fill="#FFFFFF")
+    canvas.create_text(8*cell_size//2, 4*cell_size//2, text="Black Wins!", font=("Arial", cell_size, "bold"), fill="#000000")
+    create_rematch_button()
+
+def draw_stalemate():
+    global board, click_detection
+    canvas.delete('all')
+    board = create_board()
+    click_detection = False
+    draw_board()
+    for dx in (-1, 1):
+        for dy in (-1, 1):
+            canvas.create_text(8*cell_size//2 + dx, 4*cell_size//2 + dy, text="Stalemate!", font=("Arial", cell_size, "bold"), fill="#000000")
+    canvas.create_text(8*cell_size//2, 4*cell_size//2, text="Stalemate!", font=("Arial", cell_size, "bold"), fill="#FFFFFF")
     create_rematch_button()
 
 def create_rematch_button():
-    b = Button(window, text="Rematch", font=("Arial", 16), command=rematch)
-    b.place(relx=0.5, y=8*cell_size//2 + 70, anchor="n", width=120, height=40)
+    global rematch_button, home_button
+    home_button = Button(window, text="Title Screen", font=("Arial", cell_size//3), command=start_screen)
+    rematch_button = Button(window, text="Rematch", font=("Arial", cell_size//3), command=rematch)
+    home_button.place(relx=0.5, y=4*cell_size//2 + cell_size, anchor="n", width=cell_size*3, height=cell_size*0.85)
+    rematch_button.place(relx=0.5, y=4*cell_size//2 + 2 * cell_size, anchor="n", width=cell_size*3, height=cell_size*0.85)
 
 def rematch():
-    global board, turn, selected, king_moved, rook_moved, ai
+    global board, turn, selected, king_moved, rook_moved, ai, click_detection
     for w in window.winfo_children():
         if isinstance(w, Button):
             w.destroy()
+    click_detection = True
     turn = 0
     selected = None
     king_moved = {0: False, 1: False}
@@ -362,76 +393,77 @@ def highlight_options(selected_piece):
 
 # ---------- Input and execution ----------
 def on_click(event):
-    global selected, turn, king_moved, rook_moved
-    row = event.y // cell_size
-    col = event.x // cell_size
-    if not (0 <= row <= 7 and 0 <= col <= 7): return
-    piece = board[row][col]
-    if piece and piece[0] == turn and not selected:
-        selected = (row, col)
-        draw_board()
-        return
-    if selected:
-        sr, sc = selected
-        if check_valid(sr, sc, row, col) and not is_check(sr, sc, row, col):
-            moving = board[sr][sc]
-            moving_player, moving_type = moving[0], moving[1]
-            # execute move
-            board[row][col] = moving
-            board[sr][sc] = False
+    if click_detection == True:
+        global selected, turn, king_moved, rook_moved
+        row = event.y // cell_size
+        col = event.x // cell_size
+        if not (0 <= row <= 7 and 0 <= col <= 7): return
+        piece = board[row][col]
+        if piece and piece[0] == turn and not selected:
+            selected = (row, col)
+            draw_board()
+            return
+        if selected:
+            sr, sc = selected
+            if check_valid(sr, sc, row, col) and not is_check(sr, sc, row, col):
+                moving = board[sr][sc]
+                moving_player, moving_type = moving[0], moving[1]
+                # execute move
+                board[row][col] = moving
+                board[sr][sc] = False
 
-            # handle castling (if king moved two squares)
-            if moving_type == 1 and abs(col - sc) == 2:
-                kr = row
-                if col == 6:  # kingside
-                    board[kr][5] = board[kr][7]
-                    board[kr][7] = False
-                    rook_moved[moving_player][7] = True
-                elif col == 2:  # queenside
-                    board[kr][3] = board[kr][0]
-                    board[kr][0] = False
-                    rook_moved[moving_player][0] = True
+                # handle castling (if king moved two squares)
+                if moving_type == 1 and abs(col - sc) == 2:
+                    kr = row
+                    if col == 6:  # kingside
+                        board[kr][5] = board[kr][7]
+                        board[kr][7] = False
+                        rook_moved[moving_player][7] = True
+                    elif col == 2:  # queenside
+                        board[kr][3] = board[kr][0]
+                        board[kr][0] = False
+                        rook_moved[moving_player][0] = True
 
-            # update moved flags
-            if moving_type == 1:
-                king_moved[moving_player] = True
-            if moving_type == 4:
-                if (sr, sc) == (7 if moving_player == 0 else 0, 0):
-                    rook_moved[moving_player][0] = True
-                if (sr, sc) == (7 if moving_player == 0 else 0, 7):
-                    rook_moved[moving_player][7] = True
+                # update moved flags
+                if moving_type == 1:
+                    king_moved[moving_player] = True
+                if moving_type == 4:
+                    if (sr, sc) == (7 if moving_player == 0 else 0, 0):
+                        rook_moved[moving_player][0] = True
+                    if (sr, sc) == (7 if moving_player == 0 else 0, 7):
+                        rook_moved[moving_player][7] = True
 
-            selected = None
+                selected = None
 
-            # promotion for player's pawn
-            if moving_type == 0 and (row == 0 or row == 7):
-                prompt_promotion(row, col, moving_player)
+                # promotion for player's pawn
+                if moving_type == 0 and (row == 0 or row == 7):
+                    prompt_promotion(row, col, moving_player)
 
-            # switch turn
-            turn = 1 - turn
+                # switch turn
+                turn = 1 - turn
 
-            if game_mode == 0:
-                # if it's now AI's turn, query engine
-                if turn == 1 and ai and ai.engine_alive():
-                    window.update()
-                    # small pause to give UI feedback
-                    time.sleep(0.12)
-                    ai_move = ai.get_ai_move(board, turn_char='b')
-                    if ai_move:
-                        move_piece_from_notation(ai_move)
-                        # after AI move, reset to human turn
-                        turn = 1 - turn
-                        draw_board()
+                if game_mode == 0:
+                    # if it's now AI's turn, query engine
+                    if turn == 1 and ai and ai.engine_alive():
                         window.update()
-                        time.sleep(0.08)
-                        if checkmate():
-                            return
+                        # small pause to give UI feedback
+                        time.sleep(0.12)
+                        ai_move = ai.get_ai_move(board, turn_char='b')
+                        if ai_move:
+                            move_piece_from_notation(ai_move)
+                            # after AI move, reset to human turn
+                            turn = 1 - turn
+                            draw_board()
+                            window.update()
+                            time.sleep(0.08)
+                            if checkmate():
+                                return
 
-            if checkmate():
-                return
-        else:
-            selected = None
-    draw_board()
+                if checkmate():
+                    return
+            else:
+                selected = None
+        draw_board()
 
 # check_valid uses movement functions and the move must not leave own king in check
 def check_valid(sr, sc, er, ec, board_ref=None, player=None):
@@ -694,7 +726,7 @@ def change_piece_scheme():
 
 def change_board_size():
     global cell_size
-    cell_size = {50: 70, 70: 100, 100: 30, 30: 50}.get(cell_size, 50)
+    cell_size = {50: 70, 70: 100, 100: 130, 130: 50}.get(cell_size, 50)
     options()
 
 def change_ai_difficulty():
@@ -734,7 +766,7 @@ def options():
         btn.place(relx=0.5, y=start_y + i*spacing, anchor="center", width=cell_size*3, height=cell_size*0.8)
 
 def clear_buttons():
-    for btn_name in ["one_player_button", "two_player_button", "options_button", "back_button", "board_color_button", "piece_color_button", "board_size_button", "ai_difficulty_button"]:
+    for btn_name in ["one_player_button", "two_player_button", "options_button", "back_button", "board_color_button", "piece_color_button", "board_size_button", "ai_difficulty_button", "home_button", "rematch_button"]:
         btn = globals().get(btn_name)
         if btn:
             try:
@@ -744,22 +776,23 @@ def clear_buttons():
             globals()[btn_name] = None
 
 def start_screen():
-    global one_player_button, two_player_button, options_button, board
+    global one_player_button, two_player_button, options_button, board, click_detection
     clear_buttons()
     canvas.config(width=8*cell_size, height=8*cell_size)
     canvas.delete("all")
-    board = create_board()  # ensure board exists for drawing
+    board = create_board()
+    click_detection = False
     draw_board()
 
-    title_font_size = max(24, int(cell_size * 0.65))
+    title_font_size = max(32, int(cell_size * 0.85))
     title_x = int(8*cell_size / 2)
     title_y = int(cell_size * 2.5)
 
     # Draw title with shadow
     for dx in (-1, 1):
         for dy in (-1, 1):
-            canvas.create_text(title_x + dx, title_y + dy, text="Chess Game", font=("Arial", title_font_size, "bold"), fill="#000000")
-    canvas.create_text(title_x, title_y, text="Chess Game", font=("Arial", title_font_size, "bold"), fill="#FFFFFF")
+            canvas.create_text(title_x + dx, title_y + dy, text="Chess", font=("Arial", title_font_size, "bold"), fill="#000000")
+    canvas.create_text(title_x, title_y, text="Chess", font=("Arial", title_font_size, "bold"), fill="#FFFFFF")
 
     # Create buttons
     one_player_button = Button(window, text="One Player", font=("Arial", max(12, int(cell_size * 0.3))), command=one_player)
@@ -773,7 +806,6 @@ def start_screen():
         btn.place(relx=0.5, y=start_y + i*spacing, anchor="center", width=int(cell_size*3), height=int(cell_size*0.8))
 
 def start_game():
-    """Clear buttons and start the chess game."""
     clear_buttons()
     initiate_chess()
 
@@ -789,7 +821,8 @@ def two_player():
 
 # ---------- Chess initiation ----------
 def initiate_chess():
-    global board, turn, selected, king_moved, rook_moved, ai
+    global board, turn, selected, king_moved, rook_moved, ai, click_detection
+    click_detection = True
     turn = 0
     selected = None
     king_moved = {0: False, 1: False}
@@ -804,8 +837,10 @@ def initiate_chess():
 # ---------- Debugging helpers ----------
 def debug_board(debug_board_name):
     global custom_board
-    if debug_board_name == 'Checkmate':
+    if debug_board_name == 'checkmate':
         custom_board = [((0,3), (1,1)), ((2,2), (0,2)), ((2,4), (0,3)), ((3,3), (0,1))]
+    elif debug_board_name == 'stalemate':
+        custom_board = [((0,3), (1,1)), ((3,3), (0,1)),((1,3), (0,0))]
 
 # ---------- Shutdown handling ----------
 def on_close():
@@ -820,6 +855,10 @@ def on_close():
 window.protocol("WM_DELETE_WINDOW", on_close)
 
 # ---------- Start the app ----------
-board = create_board()  
+cell_size = 130
+colors = [*color_schemes[1]]
+current_color_scheme = 1
+debug_board("checkmate")
+
 start_screen()
 window.mainloop()
