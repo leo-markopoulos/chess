@@ -48,11 +48,6 @@ rematch_button = None
 home_button = None
 ai = None
 
-STOCKFISH_PATH = "/opt/homebrew/bin/stockfish" 
-if not os.path.exists(STOCKFISH_PATH):
-    STOCKFISH_PATH = shutil.which("stockfish") or STOCKFISH_PATH
-
-
 # ---------- Board creation ----------
 def create_board():
     board = [[False for _ in range(8)] for _ in range(8)]
