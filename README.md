@@ -1,2 +1,2 @@
 # chess
-Creating a chess game planning on integrating AI and minor tweaks
+Fully functional chess game with single and multiplayer, color schemes, and animations.
